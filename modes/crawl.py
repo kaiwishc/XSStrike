@@ -28,8 +28,7 @@ def crawl(scheme, host, main_url, form, blindXSS, blindPayload, headers, delay, 
                     url = scheme + '://' + host + '/' + url
                 if url not in core.config.globalVariables['checkedForms']:
                     core.config.globalVariables['checkedForms'][url] = []
-                method = each['method']
-                GET = True if method == 'get' else False
+                method = each['method'].upper()
                 inputs = each['inputs']
                 paramData = {}
                 for one in inputs:
@@ -40,11 +39,11 @@ def crawl(scheme, host, main_url, form, blindXSS, blindPayload, headers, delay, 
                             paramsCopy = copy.deepcopy(paramData)
                             paramsCopy[paramName] = xsschecker
                             response = requester(
-                                url, paramsCopy, headers, GET, delay, timeout)
+                                url, paramsCopy, headers, method, delay, timeout)
                             occurences = htmlParser(response, encoding)
                             positions = occurences.keys()
                             occurences = filterChecker(
-                                url, paramsCopy, headers, GET, delay, occurences, timeout, encoding)
+                                url, paramsCopy, headers, method, delay, occurences, timeout, encoding)
                             vectors = generator(occurences, response.text)
                             if vectors:
                                 for confidence, vects in vectors.items():
@@ -60,4 +59,4 @@ def crawl(scheme, host, main_url, form, blindXSS, blindPayload, headers, delay, 
                             if blindXSS and blindPayload:
                                 paramsCopy[paramName] = blindPayload
                                 requester(url, paramsCopy, headers,
-                                          GET, delay, timeout)
+                                          method, delay, timeout)

@@ -12,7 +12,7 @@ from core.log import setup_logger
 logger = setup_logger(__name__)
 
 
-def fuzzer(url, params, headers, GET, delay, timeout, WAF, encoding):
+def fuzzer(url, params, headers, method, delay, timeout, WAF, encoding):
     for fuzz in fuzzes:
         if delay == 0:
             delay = 0
@@ -22,7 +22,7 @@ def fuzzer(url, params, headers, GET, delay, timeout, WAF, encoding):
             if encoding:
                 fuzz = encoding(unquote(fuzz))
             data = replaceValue(params, xsschecker, fuzz, copy.deepcopy)
-            response = requester(url, data, headers, GET, delay/2, timeout)
+            response = requester(url, data, headers, method, delay/2, timeout)
         except:
             logger.error('WAF is dropping suspicious requests.')
             if delay == 0:
@@ -35,7 +35,7 @@ def fuzzer(url, params, headers, GET, delay, timeout, WAF, encoding):
                 limit -= 1
                 sleep(1)
             try:
-                requester(url, params, headers, GET, 0, 10)
+                requester(url, params, headers, method, 0, 10)
                 logger.good('Pheww! Looks like sleeping for %s%i%s seconds worked!' % (
                     green, ((delay + 1) * 2), end))
             except:

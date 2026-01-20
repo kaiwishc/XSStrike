@@ -37,7 +37,7 @@ def photon(seedUrl, headers, level, threadCount, delay, timeout, skipDOM):
             for name, value in params.items():
                 inps.append({'name': name, 'value': value})
             forms.append({0: {'action': url, 'method': 'get', 'inputs': inps}})
-        response = requester(url, params, headers, True, delay, timeout).text
+        response = requester(url, params, headers, 'GET', delay, timeout).text
         retireJs(url, response)
         if not skipDOM:
             highlighted = dom(response)

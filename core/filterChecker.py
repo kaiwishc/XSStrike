@@ -1,7 +1,7 @@
 from core.checker import checker
 
 
-def filterChecker(url, params, headers, GET, delay, occurences, timeout, encoding):
+def filterChecker(url, params, headers, method, delay, occurences, timeout, encoding):
     positions = occurences.keys()
     sortedEfficiencies = {}
     # adding < > to environments anyway because they can be used in all contexts
@@ -26,7 +26,7 @@ def filterChecker(url, params, headers, GET, delay, occurences, timeout, encodin
     for environment in environments:
         if environment:
             efficiencies = checker(
-                url, params, headers, GET, delay, environment, positions, timeout, encoding)
+                url, params, headers, method, delay, environment, positions, timeout, encoding)
             efficiencies.extend([0] * (len(occurences) - len(efficiencies)))
             for occurence, efficiency in zip(occurences, efficiencies):
                 occurences[occurence]['score'][environment] = efficiency

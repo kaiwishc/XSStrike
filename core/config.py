@@ -11,8 +11,13 @@ proxies = {'http': 'http://0.0.0.0:8080', 'https': 'http://0.0.0.0:8080'}
 minEfficiency = 90  # payloads below this efficiency will not be displayed
 
 delay = 0  # default delay between http requests
-threadCount = 10  # default number of threads
+threadCount = 3  # default number of threads
 timeout = 10  # default number of http request timeout
+
+# JS rendering configuration
+jsRender = False  # whether to use JavaScript rendering (requires Playwright)
+jsRenderWait = 10  # maximum seconds to wait for page load (continues when page ready or timeout)
+browserHeadless = True  # run browser in headless mode
 
 # attributes that have special properties
 specialAttributes = ['srcdoc', 'src']

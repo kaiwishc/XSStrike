@@ -20,16 +20,19 @@ logger = setup_logger(__name__)
 
 def scan(target, paramData, encoding, headers, delay, timeout, skipDOM, skip):
     GET, POST = (False, True) if paramData else (True, False)
+    method = getVar('method')
+    if not method:
+        method = 'GET' if GET else 'POST'
     # If the user hasn't supplied the root url with http(s), we will handle it
     if not target.startswith('http'):
         try:
             response = requester('https://' + target, {},
-                                 headers, GET, delay, timeout)
+                                 headers, method, delay, timeout)
             target = 'https://' + target
         except:
             target = 'http://' + target
     logger.debug('Scan target: {}'.format(target))
-    response = requester(target, {}, headers, GET, delay, timeout).text
+    response = requester(target, {}, headers, method, delay, timeout).text
 
     if not skipDOM:
         logger.run('Checking for DOM vulnerabilities')
@@ -50,7 +53,7 @@ def scan(target, paramData, encoding, headers, delay, timeout, skipDOM, skip):
         logger.error('No parameters to test.')
         quit()
     WAF = wafDetector(
-        url, {list(params.keys())[0]: xsschecker}, headers, GET, delay, timeout)
+        url, {list(params.keys())[0]: xsschecker}, headers, method, delay, timeout)
     if WAF:
         logger.error('WAF detected: %s%s%s' % (green, WAF, end))
     else:
@@ -63,7 +66,7 @@ def scan(target, paramData, encoding, headers, delay, timeout, skipDOM, skip):
             paramsCopy[paramName] = encoding(xsschecker)
         else:
             paramsCopy[paramName] = xsschecker
-        response = requester(url, paramsCopy, headers, GET, delay, timeout)
+        response = requester(url, paramsCopy, headers, method, delay, timeout)
         occurences = htmlParser(response, encoding)
         positions = occurences.keys()
         logger.debug('Scan occurences: {}'.format(occurences))
@@ -75,7 +78,7 @@ def scan(target, paramData, encoding, headers, delay, timeout, skipDOM, skip):
 
         logger.run('Analysing reflections')
         efficiencies = filterChecker(
-            url, paramsCopy, headers, GET, delay, occurences, timeout, encoding)
+            url, paramsCopy, headers, method, delay, occurences, timeout, encoding)
         logger.debug('Scan efficiencies: {}'.format(efficiencies))
         logger.run('Generating payloads')
         vectors = generator(occurences, response.text)
@@ -97,7 +100,7 @@ def scan(target, paramData, encoding, headers, delay, timeout, skipDOM, skip):
                 if not GET:
                     vect = unquote(vect)
                 efficiencies = checker(
-                    url, paramsCopy, headers, GET, delay, vect, positions, timeout, encoding)
+                    url, paramsCopy, headers, method, delay, vect, positions, timeout, encoding)
                 if not efficiencies:
                     for i in range(len(occurences)):
                         efficiencies.append(0)

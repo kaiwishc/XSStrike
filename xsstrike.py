@@ -53,6 +53,8 @@ parser.add_argument('--crawl', help='crawl',
                     dest='recursive', action='store_true')
 parser.add_argument('--json', help='treat post data as json',
                     dest='jsonData', action='store_true')
+parser.add_argument('--method', help='http method to use',
+                    dest='method')
 parser.add_argument('--path', help='inject payloads in the path',
                     dest='path', action='store_true')
 parser.add_argument(
@@ -80,12 +82,20 @@ parser.add_argument('--file-log-level', help='File logging level', dest='file_lo
                     choices=core.log.log_config.keys(), default=None)
 parser.add_argument('--log-file', help='Name of the file to log', dest='log_file',
                     default=core.log.log_file)
+parser.add_argument('--js-render', help='use JavaScript rendering (requires Playwright)',
+                    dest='jsRender', action='store_true')
+parser.add_argument('--js-wait', help='max seconds to wait for page load (default: 10s)',
+                    dest='jsRenderWait', type=int, default=core.config.jsRenderWait)
 args = parser.parse_args()
+
+if args.method:
+    args.method = args.method.upper()
 
 # Pull all parameter values of dict from argparse namespace into local variables of name == key
 # The following works, but the static checkers are too static ;-) locals().update(vars(args))
 target = args.target
 path = args.path
+method = args.method
 jsonData = args.jsonData
 paramData = args.paramData
 encode = args.encode
@@ -110,6 +120,8 @@ core.log.log_file = args.log_file
 logger = core.log.setup_logger()
 
 core.config.globalVariables = vars(args)
+core.config.jsRender = args.jsRender
+core.config.jsRenderWait = args.jsRenderWait
 
 # Import everything else required from core lib
 from core.config import blindPayload

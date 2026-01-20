@@ -3,7 +3,7 @@ from urllib.parse import urlparse, unquote
 
 from core.colors import good, green, end
 from core.requester import requester
-from core.utils import getUrl, getParams
+from core.utils import getUrl, getParams, getVar
 from core.log import setup_logger
 
 logger = setup_logger(__name__)
@@ -11,6 +11,9 @@ logger = setup_logger(__name__)
 
 def bruteforcer(target, paramData, payloadList, encoding, headers, delay, timeout):
     GET, POST = (False, True) if paramData else (True, False)
+    method = getVar('method')
+    if not method:
+        method = 'GET' if GET else 'POST'
     host = urlparse(target).netloc  # Extracts host out of the url
     logger.debug('Parsed host to bruteforce: {}'.format(host))
     url = getUrl(target, GET)
@@ -30,7 +33,7 @@ def bruteforcer(target, paramData, payloadList, encoding, headers, delay, timeou
                 payload = encoding(unquote(payload))
             paramsCopy[paramName] = payload
             response = requester(url, paramsCopy, headers,
-                                 GET, delay, timeout).text
+                                 method, delay, timeout).text
             if encoding:
                 payload = encoding(payload)
             if payload in response:

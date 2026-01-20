@@ -203,7 +203,7 @@ def retireJs(url, response):
         if script not in getVar('checkedScripts'):
             updateVar('checkedScripts', script, 'add')
             uri = handle_anchor(url, script)
-            response = requester(uri, '', getVar('headers'), True, getVar('delay'), getVar('timeout')).text
+            response = requester(uri, '', getVar('headers'), 'GET', getVar('delay'), getVar('timeout')).text
             result = main_scanner(uri, response)
             if result:
                 logger.red_line()
