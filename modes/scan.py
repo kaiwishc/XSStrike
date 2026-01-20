@@ -11,7 +11,7 @@ from core.filterChecker import filterChecker
 from core.generator import generator
 from core.htmlParser import htmlParser
 from core.requester import requester
-from core.utils import getUrl, getParams, getVar
+from core.utils import getUrl, getParams, getVar, flattenParams
 from core.wafDetector import wafDetector
 from core.log import setup_logger
 
@@ -90,8 +90,14 @@ def scan(target, paramData, encoding, headers, delay, timeout, skipDOM, skip):
             continue
         logger.info('Payloads generated: %i' % total)
         progress = 0
+        # 标志变量：用于在 skip 模式下跳过当前参数
+        skip_current_param = False
         for confidence, vects in vectors.items():
+            if skip_current_param:
+                break  # 跳出 confidence 循环
             for vect in vects:
+                if skip_current_param:
+                    break  # 跳出 vect 循环
                 if core.config.globalVariables['path']:
                     vect = vect.replace('/', '%2F')
                 loggerVector = vect
@@ -99,25 +105,41 @@ def scan(target, paramData, encoding, headers, delay, timeout, skipDOM, skip):
                 logger.run('Progress: %i/%i\r' % (progress, total))
                 if not GET:
                     vect = unquote(vect)
-                efficiencies = checker(
+                efficiencies, snippets = checker(
                     url, paramsCopy, headers, method, delay, vect, positions, timeout, encoding)
                 if not efficiencies:
                     for i in range(len(occurences)):
                         efficiencies.append(0)
+                        snippets.append('')
                 bestEfficiency = max(efficiencies)
-                if bestEfficiency == 100 or (vect[0] == '\\' and bestEfficiency >= 95):
+                if bestEfficiency > minEfficiency or (vect[0] == '\\' and bestEfficiency >= 95):
+                    index = efficiencies.index(bestEfficiency)
+                    bestSnippet = snippets[index]
+                    occurenceList = list(occurences.values())
+                    bestContext = occurenceList[index]['context']
+
                     logger.red_line()
                     logger.good('Payload: %s' % loggerVector)
+                    logger.info('Parameter: %s' % paramName)
+                    logger.info('Context: %s' % bestContext)
                     logger.info('Efficiency: %i' % bestEfficiency)
                     logger.info('Confidence: %i' % confidence)
-                    if not skip:
-                        choice = input(
-                            '%s Would you like to continue scanning? [y/N] ' % que).lower()
-                        if choice != 'y':
-                            quit()
-                elif bestEfficiency > minEfficiency:
-                    logger.red_line()
-                    logger.good('Payload: %s' % loggerVector)
-                    logger.info('Efficiency: %i' % bestEfficiency)
-                    logger.info('Confidence: %i' % confidence)
+                    if GET:
+                        logger.info('Reproduction: %s%s' % (url, flattenParams(paramName, params, loggerVector)))
+                    
+                    # Clean up snippet for display
+                    bestSnippet = bestSnippet.replace('st4r7s', '').replace('3nd', '')
+                    logger.info('Reflection: %s' % bestSnippet)
+
+                    if bestEfficiency == 100 or (vect[0] == '\\' and bestEfficiency >= 95):
+                        if not skip:
+                            choice = input(
+                                '%s Would you like to continue scanning? [y/N] ' % que).lower()
+                            if choice != 'y':
+                                quit()
+                        else:
+                            # skip 模式：发现漏洞后，跳过当前参数，继续扫描下一个参数
+                            logger.info('Skipping remaining payloads for parameter: %s' % paramName)
+                            skip_current_param = True
+                            break  # 跳出 vect 循环
         logger.no_format('')

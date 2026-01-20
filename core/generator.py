@@ -1,9 +1,19 @@
-from core.config import xsschecker, badTags, fillings, eFillings, lFillings, jFillings, eventHandlers, tags, functions
+from core.config import xsschecker, badTags, getPayloadConfig
 from core.jsContexter import jsContexter
 from core.utils import randomUpper as r, genGen, extractScripts
 
 
 def generator(occurences, response):
+    # 获取当前激活的payload配置
+    config = getPayloadConfig()
+    fillings = config['fillings']
+    eFillings = config['eFillings']
+    lFillings = config['lFillings']
+    jFillings = config['jFillings']
+    eventHandlers = config['eventHandlers']
+    tags = config['tags']
+    functions = config['functions']
+    
     scripts = extractScripts(response)
     index = 0
     vectors = {11: set(), 10: set(), 9: set(), 8: set(), 7: set(),

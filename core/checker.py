@@ -21,17 +21,26 @@ def checker(url, params, headers, method, delay, payload, positions, timeout, en
     #  Itretating over the reflections
     num = 0
     efficiencies = []
+    reflected_snippets = []
     for position in filledPositions:
         allEfficiencies = []
+        snippet = ""
         try:
+            start = max(0, reflectedPositions[num] - 50)
+            end = min(len(response), reflectedPositions[num] + len(checkString) + 50)
             reflected = response[reflectedPositions[num]
                 :reflectedPositions[num]+len(checkString)]
+            snippet = response[start:end]
             efficiency = fuzz.partial_ratio(reflected, checkString.lower())
             allEfficiencies.append(efficiency)
         except IndexError:
             pass
         if position:
+            start = max(0, position - 50)
+            end = min(len(response), position + len(checkString) + 50)
             reflected = response[position:position+len(checkString)]
+            if not snippet:
+                snippet = response[start:end]
             if encoding:
                 checkString = encoding(checkString.lower())
             efficiency = fuzz.partial_ratio(reflected, checkString)
@@ -39,7 +48,9 @@ def checker(url, params, headers, method, delay, payload, positions, timeout, en
                 efficiency = 90
             allEfficiencies.append(efficiency)
             efficiencies.append(max(allEfficiencies))
+            reflected_snippets.append(snippet)
         else:
             efficiencies.append(0)
+            reflected_snippets.append("")
         num += 1
-    return list(filter(None, efficiencies))
+    return efficiencies, reflected_snippets

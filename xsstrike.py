@@ -86,6 +86,8 @@ parser.add_argument('--js-render', help='use JavaScript rendering (requires Play
                     dest='jsRender', action='store_true')
 parser.add_argument('--js-wait', help='max seconds to wait for page load (default: 10s)',
                     dest='jsRenderWait', type=int, default=core.config.jsRenderWait)
+parser.add_argument('--full-payloads', help='use full payload set (default: slim mode ~100 payloads)',
+                    dest='fullPayloads', action='store_true')
 args = parser.parse_args()
 
 if args.method:
@@ -122,6 +124,13 @@ logger = core.log.setup_logger()
 core.config.globalVariables = vars(args)
 core.config.jsRender = args.jsRender
 core.config.jsRenderWait = args.jsRenderWait
+
+# 应用 payload 配置模式（精简或完整）
+use_slim = not args.fullPayloads  # 默认使用精简模式，除非指定 --full-payloads
+estimated_count = core.config.applyPayloadConfig(use_slim)
+payload_mode = "精简模式" if use_slim else "完整模式"
+logger.info(f'Payload配置: {payload_mode}')
+# logger.info(f'Payload配置: {payload_mode}（预计生成 ~{estimated_count} 个payload）')
 
 # Import everything else required from core lib
 from core.config import blindPayload
