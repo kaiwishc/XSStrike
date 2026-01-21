@@ -14,6 +14,7 @@ from core.requester import requester
 from core.utils import getUrl, getParams, getVar, flattenParams
 from core.wafDetector import wafDetector
 from core.log import setup_logger
+from core.stored_xss_verifier import verify_stored_xss
 
 logger = setup_logger(__name__)
 
@@ -38,6 +39,7 @@ def scan(target, paramData, encoding, headers, delay, timeout, skipDOM, skip):
         logger.run('Checking for DOM vulnerabilities')
         highlighted = dom(response)
         if highlighted:
+            logger.good('DOM XSS Detected!')
             logger.good('Potentially vulnerable objects found')
             logger.red_line(level='good')
             for line in highlighted:
@@ -112,13 +114,74 @@ def scan(target, paramData, encoding, headers, delay, timeout, skipDOM, skip):
                         efficiencies.append(0)
                         snippets.append('')
                 bestEfficiency = max(efficiencies)
+                
+                # Check for stored XSS if verify_url is provided
+                stored_xss_found = False
+                stored_xss_method = None
+                stored_xss_context = None
+                
+                if core.config.verifyUrl:
+                    # Verify stored XSS
+                    stored_xss_found, stored_xss_method, stored_xss_context = verify_stored_xss(
+                        core.config.verifyUrl,
+                        headers,
+                        core.config.verifyMethod,
+                        vect,
+                        delay,
+                        timeout,
+                        use_js_render=core.config.jsRender
+                    )
+                    
+                    if stored_xss_found:
+                        # Stored XSS detected - report it
+                        logger.red_line()
+                        logger.good('Stored XSS Detected!')
+                        logger.good('Payload: %s' % loggerVector)
+                        logger.info('Parameter: %s' % paramName)
+                        logger.info('Injection URL: %s' % url)
+                        logger.info('Verification URL: %s' % core.config.verifyUrl)
+                        logger.info('Detection Method: %s' % stored_xss_method)
+                        logger.info('Confidence: %i' % confidence)
+                        
+                        if stored_xss_method and 'interactive' in stored_xss_method:
+                            logger.info('Trigger Type: %s (requires user interaction)' % stored_xss_method.replace('interactive_', ''))
+                        else:
+                            logger.info('Trigger Type: Immediate (on page load)')
+                        
+                        if stored_xss_context:
+                            context_preview = stored_xss_context[:200] if len(stored_xss_context) > 200 else stored_xss_context
+                            logger.info('Context: %s' % context_preview.replace('st4r7s', '').replace('3nd', ''))
+                        
+                        logger.red_line()
+                        
+                        # For stored XSS, we always want to continue checking other payloads
+                        # unless user explicitly stops
+                        if not skip:
+                            choice = input(
+                                '%s Stored XSS found! Would you like to continue scanning? [y/N] ' % que).lower()
+                            if choice != 'y':
+                                quit()
+                        else:
+                            # In skip mode, continue to next parameter after finding stored XSS
+                            logger.info('Skipping remaining payloads for parameter: %s' % paramName)
+                            skip_current_param = True
+                            break
+                
+                # Original reflected XSS detection
                 if bestEfficiency > minEfficiency or (vect[0] == '\\' and bestEfficiency >= 95):
                     index = efficiencies.index(bestEfficiency)
-                    bestSnippet = snippets[index]
                     occurenceList = list(occurences.values())
+                    
+                    # Safety check: ensure index is within bounds
+                    if index >= len(occurenceList) or index >= len(snippets):
+                        logger.warning('Index mismatch detected, skipping this payload')
+                        continue
+                    
+                    bestSnippet = snippets[index]
                     bestContext = occurenceList[index]['context']
 
                     logger.red_line()
+                    logger.good('Reflected XSS Detected!' if not stored_xss_found else 'Reflected XSS Also Detected!')
                     logger.good('Payload: %s' % loggerVector)
                     logger.info('Parameter: %s' % paramName)
                     logger.info('Context: %s' % bestContext)

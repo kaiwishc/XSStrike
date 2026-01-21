@@ -19,6 +19,10 @@ jsRender = False  # whether to use JavaScript rendering (requires Playwright)
 jsRenderWait = 10  # maximum seconds to wait for page load (continues when page ready or timeout)
 browserHeadless = True  # run browser in headless mode
 
+# Stored XSS verification configuration
+verifyUrl = None  # URL to verify stored XSS payloads
+verifyMethod = 'GET'  # HTTP method for verification URL
+
 # attributes that have special properties
 specialAttributes = ['srcdoc', 'src']
 

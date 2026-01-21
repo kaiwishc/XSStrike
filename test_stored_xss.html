@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Stored XSS Test Page</title>
+    <meta charset="UTF-8">
+</head>
+<body>
+    <h1>Stored XSS Verification Page</h1>
+    <p>This page simulates a stored XSS scenario where injected payloads are displayed.</p>
+    
+    <!-- Simulated stored content area -->
+    <div id="stored-content">
+        <!-- Payload would be injected here in a real scenario -->
+        <!-- Example: <script>alert(1)</script> -->
+    </div>
+    
+    <!-- Interactive XSS example -->
+    <div id="interactive-area">
+        <button onclick="alert('Click me!')">Click for XSS</button>
+        <div onmouseover="console.log('Hover detected')">Hover over me</div>
+    </div>
+    
+    <!-- Test markers for verification -->
+    <div style="display:none" id="test-markers">
+        <!-- The scanner will look for payloads in this page -->
+    </div>
+    
+    <script>
+        // Simulate displaying stored content
+        // In a real scenario, this would fetch from database
+        const urlParams = new URLSearchParams(window.location.search);
+        const storedData = urlParams.get('stored');
+        if (storedData) {
+            document.getElementById('stored-content').innerHTML = decodeURIComponent(storedData);
+        }
+    </script>
+</body>
+</html>

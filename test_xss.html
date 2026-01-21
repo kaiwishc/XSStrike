@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>XSS Test Page</title>
+</head>
+<body>
+    <h1>XSS Payload Test</h1>
+    <div id="output"></div>
+    
+    <script>
+        // Get URL parameters
+        const urlParams = new URLSearchParams(window.location.search);
+        const payload = urlParams.get('q');
+        
+        if (payload) {
+            // Directly insert payload (simulate XSS vulnerability)
+            document.getElementById('output').innerHTML = 'Input: ' + payload;
+        }
+    </script>
+</body>
+</html>

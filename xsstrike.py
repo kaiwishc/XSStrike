@@ -88,6 +88,10 @@ parser.add_argument('--js-wait', help='max seconds to wait for page load (defaul
                     dest='jsRenderWait', type=int, default=core.config.jsRenderWait)
 parser.add_argument('--full-payloads', help='use full payload set (default: slim mode ~100 payloads)',
                     dest='fullPayloads', action='store_true')
+parser.add_argument('--verify-url', help='URL to verify stored XSS (for POST/PUT/etc injection)',
+                    dest='verifyUrl')
+parser.add_argument('--verify-method', help='HTTP method to use for verify-url (default: GET)',
+                    dest='verifyMethod', default='GET')
 args = parser.parse_args()
 
 if args.method:
@@ -124,6 +128,8 @@ logger = core.log.setup_logger()
 core.config.globalVariables = vars(args)
 core.config.jsRender = args.jsRender
 core.config.jsRenderWait = args.jsRenderWait
+core.config.verifyUrl = args.verifyUrl
+core.config.verifyMethod = args.verifyMethod.upper() if args.verifyMethod else 'GET'
 
 # 应用 payload 配置模式（精简或完整）
 use_slim = not args.fullPayloads  # 默认使用精简模式，除非指定 --full-payloads
