@@ -112,15 +112,15 @@ def detect_interactive_xss(html_content, payload):
     return False, None, None
 
 
-def verify_stored_xss_with_js(verify_url, headers, payload, timeout=10, wait_time=3):
+def verify_stored_xss_with_js(verify_url, payload, timeout=10, wait_time=3):
     """
     Verify stored XSS using JS rendering (Playwright)
     
     This can detect XSS that triggers on page load or after JS execution
+    Note: Does not share headers with main requests, only cookies via core.config.cookie
     
     Args:
         verify_url: URL to check for stored XSS
-        headers: HTTP headers
         payload: The injected payload
         timeout: Request timeout
         wait_time: Time to wait for JS execution
@@ -137,10 +137,15 @@ def verify_stored_xss_with_js(verify_url, headers, payload, timeout=10, wait_tim
     try:
         logger.debug(f'Verifying stored XSS with JS rendering: {verify_url}')
         
+        # Use minimal headers for verification, cookies will be set via core.config.cookie
+        verify_headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+        }
+        
         # Render the page with JavaScript
         html_content, status_code, final_url = js_renderer.render_page(
             verify_url,
-            headers,
+            verify_headers,
             wait_time
         )
         
@@ -166,13 +171,13 @@ def verify_stored_xss_with_js(verify_url, headers, payload, timeout=10, wait_tim
         return False, None, None
 
 
-def verify_stored_xss_standard(verify_url, headers, method, payload, delay, timeout):
+def verify_stored_xss_standard(verify_url, method, payload, delay, timeout):
     """
     Verify stored XSS using standard HTTP request (no JS rendering)
+    Note: Does not share headers with main requests, only cookies via core.config.cookie
     
     Args:
         verify_url: URL to check for stored XSS
-        headers: HTTP headers
         method: HTTP method (GET, POST, etc)
         payload: The injected payload
         delay: Delay between requests
@@ -185,8 +190,13 @@ def verify_stored_xss_standard(verify_url, headers, method, payload, delay, time
     try:
         logger.debug(f'Verifying stored XSS (standard): {verify_url}')
         
+        # Use minimal headers for verification, cookies will be set via core.config.cookie
+        verify_headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+        }
+        
         # Make request to verification URL
-        response = requester(verify_url, {}, headers, method, delay, timeout)
+        response = requester(verify_url, {}, verify_headers, method, delay, timeout)
         
         if not response or not response.text:
             return False, None, None
@@ -210,13 +220,13 @@ def verify_stored_xss_standard(verify_url, headers, method, payload, delay, time
         return False, None, None
 
 
-def verify_stored_xss(verify_url, headers, verify_method, payload, delay, timeout, use_js_render=False):
+def verify_stored_xss(verify_url, verify_method, payload, delay, timeout, use_js_render=False):
     """
     Main function to verify if a stored XSS payload was successfully injected
+    Note: Does not share headers with main requests, only cookies via core.config.cookie
     
     Args:
         verify_url: URL to check for stored XSS
-        headers: HTTP headers
         verify_method: HTTP method for verification
         payload: The injected payload
         delay: Delay between requests
@@ -233,7 +243,7 @@ def verify_stored_xss(verify_url, headers, verify_method, payload, delay, timeou
     # Try JS rendering if enabled
     if use_js_render:
         success, method, context = verify_stored_xss_with_js(
-            verify_url, headers, payload, timeout, 
+            verify_url, payload, timeout, 
             wait_time=core.config.jsRenderWait
         )
         if success:
@@ -241,7 +251,7 @@ def verify_stored_xss(verify_url, headers, verify_method, payload, delay, timeou
     
     # Fallback to or use standard HTTP verification
     success, method, context = verify_stored_xss_standard(
-        verify_url, headers, verify_method, payload, delay, timeout
+        verify_url, verify_method, payload, delay, timeout
     )
     
     return success, method, context

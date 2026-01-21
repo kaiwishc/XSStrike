@@ -23,6 +23,9 @@ browserHeadless = True  # run browser in headless mode
 verifyUrl = None  # URL to verify stored XSS payloads
 verifyMethod = 'GET'  # HTTP method for verification URL
 
+# Cookie configuration
+cookie = None  # Cookie string to include in requests (e.g., "session=abc123; user_id=456")
+
 # attributes that have special properties
 specialAttributes = ['srcdoc', 'src']
 

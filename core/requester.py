@@ -50,6 +50,11 @@ def requester(url, data, headers, method, delay, timeout):
         headers['User-Agent'] = random.choice(user_agents)
     elif headers['User-Agent'] == '$':
         headers['User-Agent'] = random.choice(user_agents)
+    
+    # Add cookie to headers if specified
+    if core.config.cookie and 'Cookie' not in headers:
+        headers['Cookie'] = core.config.cookie
+    
     logger.debug('Requester url: {}'.format(url))
     logger.debug('Requester method: {}'.format(method))
     logger.debug_json('Requester data:', data)

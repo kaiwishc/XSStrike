@@ -175,6 +175,28 @@ def render_page(url, headers=None, wait_time=3):
             _page = _context.new_page()
             logger.debug('Created new browser context and page')
         
+        # Set cookies if specified
+        import core.config
+        if core.config.cookie:
+            # Parse cookie string and add to context
+            from urllib.parse import urlparse
+            url_parts = urlparse(url)
+            domain = url_parts.netloc
+            
+            # Parse cookie string (format: "name1=value1; name2=value2")
+            cookie_pairs = [c.strip() for c in core.config.cookie.split(';')]
+            for cookie_pair in cookie_pairs:
+                if '=' in cookie_pair:
+                    name, value = cookie_pair.split('=', 1)
+                    cookie_dict = {
+                        'name': name.strip(),
+                        'value': value.strip(),
+                        'domain': domain,
+                        'path': '/'
+                    }
+                    _context.add_cookies([cookie_dict])
+                    logger.debug(f'Added cookie: {name.strip()}={value.strip()}')
+        
         # Navigate to URL with optimized wait strategy
         logger.debug(f'Rendering URL: {url}')
         

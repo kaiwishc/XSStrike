@@ -92,6 +92,8 @@ parser.add_argument('--verify-url', help='URL to verify stored XSS (for POST/PUT
                     dest='verifyUrl')
 parser.add_argument('--verify-method', help='HTTP method to use for verify-url (default: GET)',
                     dest='verifyMethod', default='GET')
+parser.add_argument('--cookie', help='cookie value to include in requests (e.g., "session=abc123; user_id=456")',
+                    dest='cookie')
 args = parser.parse_args()
 
 if args.method:
@@ -130,6 +132,7 @@ core.config.jsRender = args.jsRender
 core.config.jsRenderWait = args.jsRenderWait
 core.config.verifyUrl = args.verifyUrl
 core.config.verifyMethod = args.verifyMethod.upper() if args.verifyMethod else 'GET'
+core.config.cookie = args.cookie if args.cookie else None
 
 # Apply payload configuration mode (Slim or Full)
 use_slim = not args.fullPayloads  # Slim mode is used by default unless --full-payloads is specified

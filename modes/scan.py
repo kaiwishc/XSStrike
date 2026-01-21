@@ -124,7 +124,6 @@ def scan(target, paramData, encoding, headers, delay, timeout, skipDOM, skip):
                     # Verify stored XSS
                     stored_xss_found, stored_xss_method, stored_xss_context = verify_stored_xss(
                         core.config.verifyUrl,
-                        headers,
                         core.config.verifyMethod,
                         vect,
                         delay,
