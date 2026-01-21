@@ -4,7 +4,7 @@ from core.utils import randomUpper as r, genGen, extractScripts
 
 
 def generator(occurences, response):
-    # 获取当前激活的payload配置
+    # Get currently active payload configuration
     config = getPayloadConfig()
     fillings = config['fillings']
     eFillings = config['eFillings']

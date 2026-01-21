@@ -92,14 +92,14 @@ def scan(target, paramData, encoding, headers, delay, timeout, skipDOM, skip):
             continue
         logger.info('Payloads generated: %i' % total)
         progress = 0
-        # 标志变量：用于在 skip 模式下跳过当前参数
+        # Flag variable: used to skip current parameter in skip mode
         skip_current_param = False
         for confidence, vects in vectors.items():
             if skip_current_param:
-                break  # 跳出 confidence 循环
+                break  # Break out of confidence loop
             for vect in vects:
                 if skip_current_param:
-                    break  # 跳出 vect 循环
+                    break  # Break out of vect loop
                 if core.config.globalVariables['path']:
                     vect = vect.replace('/', '%2F')
                 loggerVector = vect
@@ -201,8 +201,8 @@ def scan(target, paramData, encoding, headers, delay, timeout, skipDOM, skip):
                             if choice != 'y':
                                 quit()
                         else:
-                            # skip 模式：发现漏洞后，跳过当前参数，继续扫描下一个参数
+                            # Skip mode: after finding a vulnerability, skip current parameter and continue with next
                             logger.info('Skipping remaining payloads for parameter: %s' % paramName)
                             skip_current_param = True
-                            break  # 跳出 vect 循环
+                            break  # Break out of vect loop
         logger.no_format('')

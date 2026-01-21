@@ -29,10 +29,10 @@ specialAttributes = ['srcdoc', 'src']
 badTags = ('iframe', 'title', 'textarea', 'noembed',
            'style', 'template', 'noscript')
 
-# ==================== Payload 配置模式 ====================
-# 提供两种模式：精简模式（~100个payload）和完整模式
+# ==================== Payload Configuration Mode ====================
+# Two modes available: Slim mode (~100 payloads) and Full mode
 
-# 精简模式配置（默认）- 约100个payload，专注于最有效的攻击向量
+# Slim mode configuration (default) - ~100 payloads, focusing on the most effective attack vectors
 slim_config = {
     'tags': ('img', 'svg', 'body', 'script'),
     'jFillings': (';'),
@@ -51,7 +51,7 @@ slim_config = {
     )
 }
 
-# 完整模式配置 - 覆盖更多变体和绕过技巧
+# Full mode configuration - covers more variants and bypass techniques
 full_config = {
     'tags': ('html', 'd3v', 'a', 'details'),
     'jFillings': (';'),
@@ -70,51 +70,51 @@ full_config = {
     )
 }
 
-# 默认使用精简模式
+# Use slim mode by default
 _useSlimPayloads = True
 
-# 获取当前激活的payload配置
+# Get currently active payload configuration
 def getPayloadConfig():
-    """获取当前激活的payload配置字典"""
+    """Get the currently active payload configuration dictionary"""
     return slim_config if _useSlimPayloads else full_config
 
 def applyPayloadConfig(use_slim=True):
     """
-    应用payload配置，切换精简模式或完整模式
+    Apply payload configuration, switch between slim and full mode
     
     Args:
-        use_slim: True=精简模式（~100个payload），False=完整模式
+        use_slim: True=slim mode (~100 payloads), False=full mode
     
     Returns:
-        预计payload数量（实际数量可能略有不同，因为会根据上下文过滤）
+        Estimated number of payloads (actual number may vary as it is filtered based on context)
     """
     global _useSlimPayloads
     _useSlimPayloads = use_slim
     
     config = getPayloadConfig()
     
-    # 更精确的预计payload数量计算
-    # 考虑到 eventHandler 与 tag 的映射关系
+    # More accurate estimation of payload count
+    # Considering the mapping between eventHandlers and tags
     total = 0
     for tag in config['tags']:
         for eventHandler in config['eventHandlers']:
             if tag in config['eventHandlers'][eventHandler]:
-                # script 标签的 direct 事件：虽然用了 continue，但仍会遍历所有 filling/eFilling/lFilling 组合
+                # direct event for script tags: although continue is used, it still iterates through all filling/eFilling/lFilling combinations
                 if tag == 'script' and eventHandler == 'direct':
-                    # <script>function</script> 格式
-                    # 实际生成：functions × fillings × eFillings × lFillings × ends
-                    # (continue 只跳过当前 end，但会遍历所有外层循环组合)
+                    # <script>function</script> format
+                    # Actually generated: functions x fillings x eFillings x lFillings x ends
+                    # (continue only skips the current end, but iterates through all outer loop combinations)
                     total += len(config['functions']) * len(config['fillings']) * \
                             len(config['eFillings']) * len(config['lFillings']) * 2
                 else:
-                    # 其他标签：functions × fillings × eFillings × lFillings × ends
+                    # Other tags: functions x fillings x eFillings x lFillings x ends
                     total += len(config['functions']) * len(config['fillings']) * \
                             len(config['eFillings']) * len(config['lFillings']) * 2
     
     return total
 
-# 导出的配置变量（向后兼容，初始值）
-# 注意：这些会在 applyPayloadConfig 调用后被更新
+# Exported configuration variables (backward compatibility, initial values)
+# Note: these will be updated after calling applyPayloadConfig
 tags = slim_config['tags']
 jFillings = slim_config['jFillings']
 lFillings = slim_config['lFillings']

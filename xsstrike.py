@@ -131,12 +131,12 @@ core.config.jsRenderWait = args.jsRenderWait
 core.config.verifyUrl = args.verifyUrl
 core.config.verifyMethod = args.verifyMethod.upper() if args.verifyMethod else 'GET'
 
-# 应用 payload 配置模式（精简或完整）
-use_slim = not args.fullPayloads  # 默认使用精简模式，除非指定 --full-payloads
+# Apply payload configuration mode (Slim or Full)
+use_slim = not args.fullPayloads  # Slim mode is used by default unless --full-payloads is specified
 estimated_count = core.config.applyPayloadConfig(use_slim)
-payload_mode = "精简模式" if use_slim else "完整模式"
-logger.info(f'Payload配置: {payload_mode}')
-# logger.info(f'Payload配置: {payload_mode}（预计生成 ~{estimated_count} 个payload）')
+payload_mode = "Slim Mode" if use_slim else "Full Mode"
+logger.info(f'Payload configuration: {payload_mode}')
+# logger.info(f'Payload configuration: {payload_mode} (estimated ~{estimated_count} payloads)')
 
 # Import everything else required from core lib
 from core.config import blindPayload

