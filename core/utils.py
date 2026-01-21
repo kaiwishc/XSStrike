@@ -27,6 +27,96 @@ def converter(data, url=False):
             return json.dumps(data)
 
 
+def flattenJSON(nested_json, parent_key='', separator='.'):
+    """
+    Flatten nested JSON structure to dot notation.
+    Example: {"a": {"b": "c"}} -> {"a.b": "c"}
+    
+    Args:
+        nested_json: Nested dictionary to flatten
+        parent_key: Parent key prefix (used in recursion)
+        separator: Separator for nested keys (default: '.')
+    
+    Returns:
+        Flattened dictionary with dot notation keys
+    """
+    items = []
+    if isinstance(nested_json, dict):
+        for key, value in nested_json.items():
+            new_key = f"{parent_key}{separator}{key}" if parent_key else key
+            if isinstance(value, dict):
+                # Recursively flatten nested dictionaries
+                items.extend(flattenJSON(value, new_key, separator).items())
+            elif isinstance(value, list):
+                # Handle arrays: convert to dict with index as key
+                for idx, item in enumerate(value):
+                    array_key = f"{new_key}[{idx}]"
+                    if isinstance(item, dict):
+                        items.extend(flattenJSON(item, array_key, separator).items())
+                    else:
+                        items.append((array_key, item))
+            else:
+                items.append((new_key, value))
+    else:
+        items.append((parent_key, nested_json))
+    return dict(items)
+
+
+def unflattenJSON(flat_json, separator='.'):
+    """
+    Unflatten dot notation JSON back to nested structure.
+    Example: {"a.b": "c"} -> {"a": {"b": "c"}}
+    
+    Args:
+        flat_json: Flattened dictionary with dot notation keys
+        separator: Separator used in flattened keys (default: '.')
+    
+    Returns:
+        Nested dictionary structure
+    """
+    result = {}
+    for key, value in flat_json.items():
+        parts = key.split(separator)
+        current = result
+        
+        for i, part in enumerate(parts[:-1]):
+            # Handle array notation like "key[0]"
+            if '[' in part:
+                base_key = part[:part.index('[')]
+                index = int(part[part.index('[') + 1:part.index(']')])
+                
+                if base_key not in current:
+                    current[base_key] = []
+                
+                # Extend list if necessary
+                while len(current[base_key]) <= index:
+                    current[base_key].append({})
+                
+                current = current[base_key][index]
+            else:
+                if part not in current:
+                    current[part] = {}
+                current = current[part]
+        
+        # Handle the last part
+        last_part = parts[-1]
+        if '[' in last_part:
+            base_key = last_part[:last_part.index('[')]
+            index = int(last_part[last_part.index('[') + 1:last_part.index(']')])
+            
+            if base_key not in current:
+                current[base_key] = []
+            
+            while len(current[base_key]) <= index:
+                current[base_key].append(None)
+            
+            current[base_key][index] = value
+        else:
+            current[last_part] = value
+    
+    return result
+
+
 def counter(string):
     string = re.sub(r'\s|\w', '', string)
     return len(string)
@@ -195,7 +285,10 @@ def getParams(url, data, GET):
         if data[:1] == '?':
             data = data[1:]
     elif data:
-        if getVar('jsonData') or getVar('path'):
+        if getVar('jsonData'):
+            # For JSON data, flatten nested structures
+            params = flattenJSON(data)
+        elif getVar('path'):
             params = data
         else:
             try:

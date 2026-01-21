@@ -5,7 +5,7 @@ from urllib3.exceptions import ProtocolError
 import warnings
 
 import core.config
-from core.utils import converter, getVar
+from core.utils import converter, getVar, unflattenJSON
 from core.log import setup_logger
 
 logger = setup_logger(__name__)
@@ -35,6 +35,8 @@ def requester(url, data, headers, method, delay, timeout):
     elif method is False:
         method = 'POST'
     if getVar('jsonData'):
+        # Unflatten the data back to nested JSON structure
+        data = unflattenJSON(data)
         data = converter(data)
     elif getVar('path'):
         url = converter(data, url)
@@ -88,7 +90,11 @@ def requester(url, data, headers, method, delay, timeout):
             response = requests.get(url, params=data, headers=headers,
                                     timeout=timeout, verify=False, proxies=core.config.proxies)
         elif getVar('jsonData'):
-            response = requests.request(method, url, json=data, headers=headers,
+            # For JSON data, it's already been processed (unflattened and converted)
+            # data is now a JSON string, we need to parse it for requests.request json parameter
+            import json
+            json_data = json.loads(data) if isinstance(data, str) else data
+            response = requests.request(method, url, json=json_data, headers=headers,
                                     timeout=timeout, verify=False, proxies=core.config.proxies)
         else:
             response = requests.request(method, url, data=data, headers=headers,
