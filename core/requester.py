@@ -60,15 +60,63 @@ def requester(url, data, headers, method, delay, timeout):
     logger.debug_json('Requester data:', data)
     logger.debug_json('Requester headers:', headers)
     
+    def _build_js_render_url(base_url, data):
+        """
+        Build a full URL for JS rendering based on base URL and data.
+
+        - If data is a dict, it will be encoded as query parameters.
+        - If data is a JSON string that decodes to dict, it will also be encoded.
+        - If data is a plain string, it is treated as raw query string.
+        - If data is empty or unsupported type, base_url is returned.
+        """
+        full_url = base_url
+
+        if not data:
+            return full_url
+
+        import json
+
+        # Case 1: data is already a dict
+        if isinstance(data, dict):
+            query_str = '&'.join(f'{k}={v}' for k, v in data.items())
+            connector = '&' if '?' in base_url else '?'
+            return f'{base_url}{connector}{query_str}'
+
+        # Case 2: data is a string: try JSON first, then fallback to raw query string
+        if isinstance(data, str):
+            parsed = None
+            try:
+                parsed = json.loads(data)
+            except Exception:
+                parsed = None
+
+            # If JSON string decoded to dict
+            if isinstance(parsed, dict):
+                query_str = '&'.join(f'{k}={v}' for k, v in parsed.items())
+                connector = '&' if '?' in base_url else '?'
+                return f'{base_url}{connector}{query_str}'
+            else:
+                # Treat as raw query string like "a=1&b=2"
+                query_str = data.lstrip('?')
+                connector = '&' if '?' in base_url else '?'
+                return f'{base_url}{connector}{query_str}'
+
+        # Unsupported type
+        logger.warning(f'Unsupported data type for JS rendering: {type(data)}')
+        return full_url
+
     # Check if JS rendering is enabled
     if core.config.jsRender and method == 'GET':
         js_renderer = get_js_renderer()
         if js_renderer:
             logger.debug('Using JS renderer for request')
             try:
-                # Render page with JavaScript
+                logger.debug(f'JS render request url={url}, data={data!r}, type={type(data)}')
+                # Use internal helper to safely build full URL
+                full_url = _build_js_render_url(url, data)
+
                 html_content, status_code, final_url = js_renderer.render_page(
-                    url if not data else url + '?' + '&'.join([f'{k}={v}' for k, v in data.items()]),
+                    full_url,
                     headers,
                     core.config.jsRenderWait
                 )
