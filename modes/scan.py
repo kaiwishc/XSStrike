@@ -33,13 +33,17 @@ def scan(target, paramData, encoding, headers, delay, timeout, skipDOM, skip):
         except:
             target = 'http://' + target
     logger.debug('Scan target: {}'.format(target))
+
+    response = requester(target, {}, headers, method, delay, timeout).text
     
     # Determine which URL to use for reflection/DOM checks
-    # For non-GET methods with verifyUrl, use verifyUrl for checking reflections
-    check_url = core.config.verifyUrl if (core.config.verifyUrl and not GET) else target
-    use_verify_for_reflection = (core.config.verifyUrl and not GET)
-    
-    response = requester(check_url, {}, headers, 'GET' if use_verify_for_reflection else method, delay, timeout).text
+    # For non-GET methods with verifyUrl, use verifyUrl for checking reflections/DOM
+    use_verify_for_reflection_dom = (core.config.verifyUrl and not GET)
+    check_url = core.config.verifyUrl if use_verify_for_reflection_dom else target
+
+    if use_verify_for_reflection_dom:
+        logger.debug('Using verify URL for DOM check: {}'.format(check_url))
+        response = requester(check_url, {}, headers, core.config.verifyMethod, delay, timeout).text
 
     # DOM XSS check (only if we have HTML response)
     if not skipDOM:
@@ -82,7 +86,7 @@ def scan(target, paramData, encoding, headers, delay, timeout, skipDOM, skip):
         
         # Check for reflections
         # For non-GET methods with verifyUrl, check reflections on verifyUrl
-        if use_verify_for_reflection:
+        if use_verify_for_reflection_dom:
             logger.debug('Using verify URL for reflection check: {}'.format(check_url))
             check_response = requester(check_url, {}, headers, 'GET', delay, timeout)
         else:
@@ -103,7 +107,7 @@ def scan(target, paramData, encoding, headers, delay, timeout, skipDOM, skip):
             # Test reflected XSS
             _test_reflected_xss(
                 url, paramsCopy, headers, method, delay, timeout, encoding,
-                occurences, check_response.text, check_url, use_verify_for_reflection,
+                occurences, check_response.text, check_url, use_verify_for_reflection_dom,
                 paramName, params, GET, skip
             )
         else:
@@ -121,16 +125,16 @@ def scan(target, paramData, encoding, headers, delay, timeout, skipDOM, skip):
 
 
 def _test_reflected_xss(url, paramsCopy, headers, method, delay, timeout, encoding,
-                        occurences, response_text, check_url, use_verify_for_reflection,
+                        occurences, response_text, check_url, use_verify_for_reflection_dom,
                         paramName, params, GET, skip):
     """Test for reflected XSS vulnerabilities"""
     logger.run('Analysing reflections')
     positions = occurences.keys()
     efficiencies = filterChecker(
-        check_url if use_verify_for_reflection else url, 
-        paramsCopy if not use_verify_for_reflection else {},
+        check_url if use_verify_for_reflection_dom else url, 
+        paramsCopy if not use_verify_for_reflection_dom else {},
         headers, 
-        'GET' if use_verify_for_reflection else method, 
+        'GET' if use_verify_for_reflection_dom else method, 
         delay, occurences, timeout, encoding
     )
     logger.debug('Scan efficiencies: {}'.format(efficiencies))
@@ -161,7 +165,7 @@ def _test_reflected_xss(url, paramsCopy, headers, method, delay, timeout, encodi
                 vect = unquote(vect)
             
             # Inject payload and check on appropriate URL
-            if use_verify_for_reflection:
+            if use_verify_for_reflection_dom:
                 # Inject to target, check on verify URL
                 from core.utils import replaceValue
                 requester(url, replaceValue(paramsCopy, xsschecker, vect, copy.deepcopy), 
@@ -199,7 +203,7 @@ def _test_reflected_xss(url, paramsCopy, headers, method, delay, timeout, encodi
                 logger.info('Confidence: %i' % confidence)
                 if GET:
                     logger.info('Reproduction: %s%s' % (url, flattenParams(paramName, params, loggerVector)))
-                elif use_verify_for_reflection:
+                elif use_verify_for_reflection_dom:
                     logger.info('Injection URL: %s' % url)
                     logger.info('Reflection URL: %s' % check_url)
                 
