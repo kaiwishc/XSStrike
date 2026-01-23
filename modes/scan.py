@@ -18,6 +18,9 @@ from core.stored_xss_verifier import verify_stored_xss
 
 logger = setup_logger(__name__)
 
+find_dom_vul = False
+find_reflected_vul = False
+find_stored_vul = False
 
 def scan(target, paramData, encoding, headers, delay, timeout, skipDOM, skip):
     GET, POST = (False, True) if paramData else (True, False)
@@ -46,10 +49,12 @@ def scan(target, paramData, encoding, headers, delay, timeout, skipDOM, skip):
         response = requester(check_url, {}, headers, core.config.verifyMethod, delay, timeout).text
 
     # DOM XSS check (only if we have HTML response)
+    global find_dom_vul
     if not skipDOM:
         logger.run('Checking for DOM vulnerabilities')
         highlighted = dom(response)
         if highlighted:
+            find_dom_vul = True
             logger.good('DOM XSS Detected!')
             logger.good('Potentially vulnerable objects found')
             logger.red_line(level='good')
@@ -66,6 +71,7 @@ def scan(target, paramData, encoding, headers, delay, timeout, skipDOM, skip):
     if not params:
         logger.error('No parameters to test.')
         quit()
+
     WAF = wafDetector(
         url, {list(params.keys())[0]: xsschecker}, headers, method, delay, timeout)
     if WAF:
@@ -96,7 +102,7 @@ def scan(target, paramData, encoding, headers, delay, timeout, skipDOM, skip):
         positions = occurences.keys()
         logger.debug('Scan occurences: {}'.format(occurences))
         
-        # ===== Reflected/DOM XSS Detection Flow =====
+        # ===== Reflected XSS Detection Flow =====
         has_reflection = len(occurences) > 0
         reflected_xss_tested = False
         
@@ -121,6 +127,10 @@ def scan(target, paramData, encoding, headers, delay, timeout, skipDOM, skip):
                 paramName, params, GET, skip
             )
         
+        if all([not find_dom_vul, not find_reflected_vul, not find_stored_vul]):
+            logger.no_format('')
+            logger.info('all tested parameters do not appear to be injectable')
+
         logger.no_format('')
 
 
@@ -193,7 +203,9 @@ def _test_reflected_xss(url, paramsCopy, headers, method, delay, timeout, encodi
                 
                 bestSnippet = snippets[index]
                 bestContext = occurenceList[index]['context']
-
+                
+                global find_reflected_vul
+                find_reflected_vul = True
                 logger.red_line()
                 logger.good('Reflected XSS Detected!')
                 logger.good('Payload: %s' % loggerVector)
@@ -288,6 +300,8 @@ def _test_stored_xss(url, paramsCopy, headers, method, delay, timeout,
         )
         
         if stored_xss_found:
+            global find_stored_vul
+            find_stored_vul = True
             logger.red_line()
             logger.good('Stored XSS Detected!')
             logger.good('Payload: %s' % loggerVector)
